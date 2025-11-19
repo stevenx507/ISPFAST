@@ -1,26 +1,20 @@
-# ISPFAST
-ispmax-pro/
+ispmax/
 ├── backend/
-│   ├── app.py
+│   ├── app.py                 # Entry point API
+│   ├── config.py              # Configuración (Env vars)
+│   ├── models.py              # Modelos DB (SQLAlchemy)
+│   ├── services/
+│   │   ├── mikrotik.py        # Lógica Core RouterOS
+│   │   └── billing.py         # Integración Stripe (Mock)
 │   ├── requirements.txt
-│   ├── .env.example
-│   └── mikrotik.py
-├── frontend/
-│   ├── package.json
-│   ├── vite.config.ts
-│   ├── index.html
-│   ├── tailwind.config.js
-│   ├── postcss.config.js
-│   └── src/
-│       ├── main.tsx
-│       ├── App.tsx
-│       ├── pages/
-│       │   ├── Login.tsx
-│       │   └── Dashboard.tsx
-│       └── components/
-│           ├── SpeedTest.tsx
-│           └── Invoice.tsx
-├── docker-compose.yml
-├── Dockerfile.backend
-├── Dockerfile.frontend
-└── README.md
+│   └── Dockerfile
+├── frontend/                  # React + Vite
+│   ├── src/
+│   │   └── App.tsx            # UI Monolítica (Demo)
+│   └── Dockerfile
+├── scripts/
+│   └── mikrotik_qos_security.rsc # Script de provisión RouterOS
+├── mobile/                    # React Native (Placeholder)
+├── docs/                      # Documentación
+├── docker-compose.yml         # Orquestación
+└── .env                       # Variables de entorno
