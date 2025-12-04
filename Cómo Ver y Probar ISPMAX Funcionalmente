@@ -5,7 +5,7 @@ Te voy a mostrar exactamente cómo poner en funcionamiento todo el sistema y ver
 1.1 Clonar y Configurar
 bash
 # Clonar el repositorio
-git clone https://github.com/tuusuario/ispmax.git
+git clone https://github.com/stevenx507/ISPFAST
 cd ispmax
 
 # Hacer ejecutables los scripts
