@@ -2,8 +2,7 @@
 Paso 1: Clonar y Configurar
 
 git clone https://github.com/stevenx507/ISPFAST
-cd ispmax
-
+cd ISPFAST
 # Hacer ejecutable el script de instalación
 chmod +x install.sh
 
