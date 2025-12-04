@@ -196,4 +196,184 @@ class MikroTikAdvancedService:
             
             # Check if PCQ types exist
             existing_types = queue_type_api.get()
-            pcq_download_exists = any(t.get('name') == 'PCQ_Download' for t in
+            pcq_download_exists = any(t.get('name') == 'PCQ_Download' for t in existing_types)
+            pcq_upload_exists = any(t.get('name') == 'PCQ_Upload' for t in existing_types)
+            
+            if not pcq_download_exists:
+                queue_type_api.add(
+                    name="PCQ_Download",
+                    kind="pcq",
+                    pcq-rate="0",
+                    pcq-limit="50",
+                    pcq-classifier="dst-address"
+                )
+            
+            if not pcq_upload_exists:
+                queue_type_api.add(
+                    name="PCQ_Upload",
+                    kind="pcq",
+                    pcq-rate="0",
+                    pcq-limit="50",
+                    pcq-classifier="src-address"
+                )
+            
+            # Create queue
+            queue_api = self.api.get_resource('/queue/simple')
+            queue_api.add(
+                name=f"client_{client.id}",
+                target=client.ip_address,
+                max_limit=f"{plan.download_speed}M/{plan.upload_speed}M",
+                burst_limit=f"{plan.burst_download}M/{plan.burst_upload}M" if plan.burst_download else "",
+                burst_threshold=f"{plan.download_speed * 0.8}M/{plan.upload_speed * 0.8}M",
+                burst_time="30s",
+                queue="PCQ_Download/PCQ_Upload",
+                comment=f"Cliente: {client.full_name}"
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Error applying v6 QoS: {e}")
+            return False
+    
+    def _configure_client_firewall(self, client: Client) -> bool:
+        """Configure firewall rules for client"""
+        try:
+            firewall_api = self.api.get_resource('/ip/firewall/filter')
+            
+            # Allow client traffic
+            firewall_api.add(
+                chain="forward",
+                src_address=client.ip_address,
+                action="accept",
+                comment=f"Permitir cliente: {client.full_name}"
+            )
+            
+            # Block dangerous ports
+            dangerous_ports = "135,137,138,139,445,1433,1434,3389"
+            firewall_api.add(
+                chain="forward",
+                src_address=client.ip_address,
+                protocol="tcp",
+                dst_port=dangerous_ports,
+                action="drop",
+                comment=f"Bloquear puertos peligrosos: {client.full_name}"
+            )
+            
+            return True
+        except Exception as e:
+            logger.error(f"Error configuring firewall: {e}")
+            return False
+    
+    def _configure_client_wifi(self, client: Client) -> bool:
+        """Configure WiFi for client CPE"""
+        try:
+            # Check if wireless interface exists
+            wireless_api = self.api.get_resource('/interface/wireless')
+            interfaces = wireless_api.get()
+            
+            if not interfaces:
+                logger.info("No wireless interfaces found, skipping WiFi config")
+                return True
+            
+            # Configure first wireless interface
+            ssid = f"ISPMAX-{client.full_name.split()[0]}"
+            wireless_api.set(
+                numbers="0",
+                disabled="no",
+                ssid=ssid,
+                security_profile="default"
+            )
+            
+            return True
+        except Exception as e:
+            logger.error(f"Error configuring WiFi: {e}")
+            return False
+    
+    def get_router_metrics(self) -> Dict[str, Any]:
+        """Get advanced router metrics"""
+        try:
+            metrics = {}
+            
+            # System resource metrics
+            system_resource = self.api.get_resource('/system/resource')
+            system_info = system_resource.get()[0]
+            metrics['system'] = {
+                'cpu_load': system_info.get('cpu-load'),
+                'free_memory': system_info.get('free-memory'),
+                'total_memory': system_info.get('total-memory'),
+                'uptime': system_info.get('uptime'),
+                'version': system_info.get('version'),
+                'board_name': system_info.get('board-name')
+            }
+            
+            # Interface metrics
+            interface_api = self.api.get_resource('/interface')
+            interfaces = interface_api.get()
+            metrics['interfaces'] = []
+            
+            for interface in interfaces:
+                metrics['interfaces'].append({
+                    'name': interface.get('name'),
+                    'type': interface.get('type'),
+                    'rx_bytes': interface.get('rx-byte'),
+                    'tx_bytes': interface.get('tx-byte'),
+                    'rx_packets': interface.get('rx-packet'),
+                    'tx_packets': interface.get('tx-packet'),
+                    'running': interface.get('running') == 'true'
+                })
+            
+            # Queue metrics
+            queue_api = self.api.get_resource('/queue/simple')
+            queues = queue_api.get()
+            metrics['queues'] = []
+            
+            for queue in queues[:10]:  # Limit to first 10 queues
+                metrics['queues'].append({
+                    'name': queue.get('name'),
+                    'target': queue.get('target'),
+                    'rate': queue.get('rate'),
+                    'packet_rate': queue.get('packet-rate'),
+                    'queued_bytes': queue.get('queued-bytes'),
+                    'queued_packets': queue.get('queued-packets')
+                })
+            
+            return metrics
+            
+        except Exception as e:
+            logger.error(f"Error getting router metrics: {e}")
+            return {}
+    
+    def backup_configuration(self) -> bool:
+        """Backup router configuration"""
+        try:
+            backup_api = self.api.get_resource('/system/backup')
+            backup_name = f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            
+            backup_api.add(
+                name=backup_name,
+                password=""
+            )
+            
+            logger.info(f"Backup created: {backup_name}")
+            return True
+        except Exception as e:
+            logger.error(f"Error creating backup: {e}")
+            return False
+    
+    def reboot_router(self) -> bool:
+        """Reboot router"""
+        try:
+            system_api = self.api.get_resource('/system')
+            system_api.call('reboot')
+            logger.info("Router reboot initiated")
+            return True
+        except Exception as e:
+            logger.error(f"Error rebooting router: {e}")
+            return False
+    
+    def disconnect(self):
+        """Disconnect from router"""
+        try:
+            if self.connection:
+                self.connection.disconnect()
+        except:
+            pass
