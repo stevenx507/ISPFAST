@@ -1,3 +1,4 @@
+
 """
 MikroTik API endpoints
 """
@@ -183,4 +184,188 @@ def update_client_speed(client_id):
 def get_router_health(router_id):
     """Get router health status"""
     try:
-        service =
+        service = MikroTikService(router_id)
+        if not service.api:
+            return jsonify({'success': False, 'error': 'Could not connect to router'}), 500
+        
+        health = service.get_system_health()
+        return jsonify({'success': True, 'health': health}), 200
+    except Exception as e:
+        logger.error(f"Error getting router health: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@mikrotik_bp.route('/routers/<router_id>/queues', methods=['GET'])
+@jwt_required()
+def get_router_queues(router_id):
+    """Get router queue statistics"""
+    try:
+        service = MikroTikService(router_id)
+        if not service.api:
+            return jsonify({'success': False, 'error': 'Could not connect to router'}), 500
+        
+        queues = service.get_queue_stats()
+        return jsonify({'success': True, 'queues': queues}), 200
+    except Exception as e:
+        logger.error(f"Error getting router queues: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@mikrotik_bp.route('/routers/<router_id>/connections', methods=['GET'])
+@jwt_required()
+def get_router_connections(router_id):
+    """Get active connections"""
+    try:
+        service = MikroTikService(router_id)
+        if not service.api:
+            return jsonify({'success': False, 'error': 'Could not connect to router'}), 500
+        
+        connections = service.get_active_connections()
+        return jsonify({'success': True, 'connections': connections}), 200
+    except Exception as e:
+        logger.error(f"Error getting connections: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@mikrotik_bp.route('/routers/<router_id>/backup', methods=['POST'])
+@jwt_required()
+def backup_router(router_id):
+    """Backup router configuration"""
+    try:
+        data = request.get_json()
+        backup_name = data.get('name')
+        
+        service = MikroTikService(router_id)
+        if not service.api:
+            return jsonify({'success': False, 'error': 'Could not connect to router'}), 500
+        
+        result = service.backup_configuration(backup_name)
+        return jsonify(result), 200 if result['success'] else 500
+    except Exception as e:
+        logger.error(f"Error backing up router: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@mikrotik_bp.route('/routers/<router_id>/reboot', methods=['POST'])
+@jwt_required()
+def reboot_router(router_id):
+    """Reboot MikroTik router"""
+    try:
+        service = MikroTikService(router_id)
+        if not service.api:
+            return jsonify({'success': False, 'error': 'Could not connect to router'}), 500
+        
+        success = service.reboot_router()
+        return jsonify({'success': success}), 200 if success else 500
+    except Exception as e:
+        logger.error(f"Error rebooting router: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@mikrotik_bp.route('/routers/<router_id>/execute-script', methods=['POST'])
+@jwt_required()
+def execute_script(router_id):
+    """Execute script on router"""
+    try:
+        data = request.get_json()
+        script_content = data.get('script')
+        
+        if not script_content:
+            return jsonify({'success': False, 'error': 'No script provided'}), 400
+        
+        service = MikroTikService(router_id)
+        if not service.api:
+            return jsonify({'success': False, 'error': 'Could not connect to router'}), 500
+        
+        result = service.execute_script(script_content)
+        return jsonify(result), 200
+    except Exception as e:
+        logger.error(f"Error executing script: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@mikrotik_bp.route('/routers/<router_id>/hotspot', methods=['POST'])
+@jwt_required()
+def configure_hotspot(router_id):
+    """Configure hotspot on router"""
+    try:
+        data = request.get_json()
+        service = MikroTikService(router_id)
+        
+        if not service.api:
+            return jsonify({'success': False, 'error': 'Could not connect to router'}), 500
+        
+        success = service.configure_hotspot(data)
+        return jsonify({'success': success}), 200 if success else 500
+    except Exception as e:
+        logger.error(f"Error configuring hotspot: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@mikrotik_bp.route('/routers/<router_id>/multi-wan', methods=['POST'])
+@jwt_required()
+def configure_multi_wan(router_id):
+    """Configure multi-WAN on router"""
+    try:
+        data = request.get_json()
+        service = MikroTikService(router_id)
+        
+        if not service.api:
+            return jsonify({'success': False, 'error': 'Could not connect to router'}), 500
+        
+        success = service.configure_multi_wan(data)
+        return jsonify({'success': success}), 200 if success else 500
+    except Exception as e:
+        logger.error(f"Error configuring multi-WAN: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@mikrotik_bp.route('/discover', methods=['GET'])
+@jwt_required()
+def discover_routers():
+    """Discover MikroTik routers in network"""
+    try:
+        from app.services.autoprovision_service import AutoProvisionService
+        service = AutoProvisionService()
+        routers = service.discover_mikrotik_network()
+        
+        return jsonify({
+            'success': True,
+            'routers': routers,
+            'count': len(routers)
+        }), 200
+    except Exception as e:
+        logger.error(f"Error discovering routers: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@mikrotik_bp.route('/advanced/provision', methods=['POST'])
+@jwt_required()
+def advanced_provision():
+    """Advanced provisioning with v6/v7 support"""
+    try:
+        data = request.get_json()
+        router_id = data.get('router_id')
+        client_id = data.get('client_id')
+        
+        if not router_id or not client_id:
+            return jsonify({'success': False, 'error': 'Missing router_id or client_id'}), 400
+        
+        router = MikroTikRouter.query.get(router_id)
+        client = Client.query.get(client_id)
+        
+        if not router:
+            return jsonify({'success': False, 'error': 'Router not found'}), 404
+        if not client:
+            return jsonify({'success': False, 'error': 'Client not found'}), 404
+        
+        # Use advanced service
+        service = MikroTikAdvancedService(
+            router.ip_address,
+            router.username,
+            router.password,
+            router.api_port
+        )
+        
+        results = service.provision_client(client, client.plan)
+        
+        if results['success']:
+            client.status = 'active'
+            from app import db
+            db.session.commit()
+        
+        return jsonify(results), 200
+    except Exception as e:
+        logger.error(f"Error in advanced provisioning: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
